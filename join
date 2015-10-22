@@ -1,0 +1,101 @@
+import java.io.IOException;
+import java.text.DecimalFormat;
+import java.util.StringTokenizer;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+
+public class Join {
+	public static class JoinMapper extends Mapper<Object, Text, Text,Text>{
+		private String switcher;
+		private Text keyline = new Text();
+		private Text valueline = new Text();
+		private String idformat;
+		private int id;
+		private String subject;
+
+		public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+			StringTokenizer itr = new StringTokenizer(value.toString().trim());
+			
+			while(itr.hasMoreTokens()){
+				switcher = itr.nextToken().trim();
+				if(switcher.equals("student")){
+					id = Integer.parseInt(itr.nextToken().trim());
+					idformat = new DecimalFormat("0000000").format(id);
+					//keyline.set(idformat+","+itr.nextToken().trim());
+					keyline.set(idformat);
+					valueline.set(itr.nextToken().trim() + "-->");
+					context.write(keyline, valueline);
+				}else if (switcher.equals("mark")){
+					subject = itr.nextToken().trim();
+					id = Integer.parseInt(itr.nextToken().trim());
+					idformat = new DecimalFormat("0000000").format(id);
+					//keyline.set(idformat + "ZZZ");
+					keyline.set(idformat);
+					valueline.set("(" + subject + "," + itr.nextToken().trim() + ")");
+					context.write(keyline, valueline);
+				}
+			}
+		}
+	}
+	
+	/*
+	public static class JoinReducer extends Reducer<Text,Text,Text,Text>{
+		public void reduce(Text key, Text value, Context context) throws IOException, InterruptedException {
+			context.write(key, value);
+		}
+	}
+	*/
+	
+	
+	
+	public static class JoinReducer extends Reducer<Text,Text,Text,Text>{
+		private String outputline;
+		private Text outputlinetext = new Text();
+		
+		public void reduce(Text key, Text value, Context context) throws IOException, InterruptedException {
+			String[] keypair = key.toString().trim().split(",");
+			if (keypair[1] != "ZZZ") {
+				outputlinetext.set(outputline);
+				context.write(outputlinetext, new Text(""));
+				outputline = keypair[1]+"-->";
+			}else if (keypair[1] == "ZZZ"){
+				outputline = outputline + "(" +value.toString() + ")";
+			}
+		}
+	}
+	
+	public static void main(String[] args) throws Exception {
+	    Configuration conf = new Configuration();
+	    Job job = Job.getInstance(conf, "join");
+	    
+	    job.setJarByClass(Join.class);
+	    
+	    job.setMapperClass(JoinMapper.class);
+	    
+	    job.setReducerClass(JoinReducer.class);
+	    
+	    job.setMapOutputKeyClass(Text.class);
+	    
+	    job.setMapOutputValueClass(Text.class);
+	    
+	    job.setOutputKeyClass(Text.class);
+	    
+	    job.setOutputValueClass(Text.class);
+	    
+	    job.setNumReduceTasks(1);
+	   
+	    FileInputFormat.addInputPath(job, new Path(args[0]));
+	    FileOutputFormat.setOutputPath(job, new Path(args[1]));
+	    
+	    System.exit(job.waitForCompletion(true) ? 0 : 1);
+	  }
+}
