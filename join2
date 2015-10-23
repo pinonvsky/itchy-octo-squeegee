@@ -1,0 +1,116 @@
+
+import java.io.IOException;
+import java.text.DecimalFormat;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.StringTokenizer;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.Reducer.Context;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+
+
+public class Join2 {
+	public static class Join2Mapper extends Mapper<Object, Text, Text, Text>{
+		private String switcher;
+		private String idformat;
+		private int id;
+		private String subject;
+		private String name;
+		private Map<String, String> studentMap = new HashMap<String, String>();
+		private Map<String, String> markMap = new HashMap<String, String>();
+		private Text nametext = new Text();
+		private Text subjectmark = new Text();
+		private String sid;
+		private String i;
+
+
+		public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+			StringTokenizer itr = new StringTokenizer(value.toString().trim());
+			
+			while(itr.hasMoreTokens()){
+				switcher = itr.nextToken().trim();
+				if(switcher.equals("student")){
+					id = Integer.parseInt(itr.nextToken().trim());
+					idformat = new DecimalFormat("0000000").format(id);
+					name = itr.nextToken().trim();
+					studentMap.put(idformat, name);
+				}else if (switcher.equals("mark")){
+					subject = itr.nextToken().trim();
+					id = Integer.parseInt(itr.nextToken().trim());
+					idformat = new DecimalFormat("0000000").format(id);
+					markMap.put(idformat, "(" + subject + "," + itr.nextToken().trim() + ")");
+				}
+			}
+			
+			Iterator<Entry<String, String>> markiter = markMap.entrySet().iterator();
+			while (markiter.hasNext()) {
+			Map.Entry<String, String> entry = (Entry<String, String>)markiter.next();
+			sid = entry.getKey();
+			subjectmark.set(entry.getValue());
+			i = studentMap.get(sid);
+			nametext.set(i);
+			context.write(nametext, subjectmark);
+			}
+		}
+	}
+	
+	public static class Join2Reducer extends Reducer<Text,Text,Text,Text>{
+		public void reduce(Text key, Text value, Context context) throws IOException, InterruptedException {
+			context.write(key, value);
+		}
+	}
+
+	/*public static class Join2Reducer extends Reducer<Text,Text,Text,Text>{
+		private Text result = new Text();
+
+		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+			String sum = "";
+			
+			for (Text val :values) {
+		    sum +=  val.toString();
+			}
+			
+			result.set(sum);
+			context.write(key, result);
+		}
+		
+	}*/
+	
+	
+	public static void main(String[] args) throws Exception {
+	    Configuration conf = new Configuration();
+	    Job job = Job.getInstance(conf, "join2");
+	    
+	    job.setJarByClass(Join2.class);
+	    
+	    job.setMapperClass(Join2Mapper.class);
+	      	    
+	    job.setReducerClass(Join2Reducer.class);
+	    
+	    job.setMapOutputKeyClass(Text.class);
+	    
+	    job.setMapOutputValueClass(Text.class);
+	    
+	    job.setOutputKeyClass(Text.class);
+	    
+	    job.setOutputValueClass(Text.class);
+	    
+	    job.setNumReduceTasks(5);
+	   
+	    FileInputFormat.addInputPath(job, new Path(args[0]));
+	    FileOutputFormat.setOutputPath(job, new Path(args[1]));
+	    
+	    System.exit(job.waitForCompletion(true) ? 0 : 1);
+	}
+	
+}
